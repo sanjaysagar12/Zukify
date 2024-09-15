@@ -1,1 +1,1 @@
-//WorkspaceAutoTable
+package database

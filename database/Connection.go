@@ -9,11 +9,30 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
-func init() {
+var (
+	UserDB      *sql.DB
+	WorkspaceDB *sql.DB
+)
+
+func InitDB() error {
 	// Load the .env file
 	if err := godotenv.Load(); err != nil {
 		fmt.Println("Error loading .env file")
+		return err
 	}
+
+	var err error
+	UserDB, err = ConnectUserDB()
+	if err != nil {
+		return fmt.Errorf("failed to connect to User database: %v", err)
+	}
+
+	WorkspaceDB, err = ConnectWorkspaceDB()
+	if err != nil {
+		return fmt.Errorf("failed to connect to Workspace database: %v", err)
+	}
+
+	return nil
 }
 
 // ConnectUserDB establishes a connection to the User database
