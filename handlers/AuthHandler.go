@@ -9,6 +9,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"golang.org/x/crypto/bcrypt"
 	"zukify.com/database"
+
 )
 
 var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
@@ -113,4 +114,14 @@ func JWTMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 
 		return echo.NewHTTPError(http.StatusUnauthorized, "Invalid token")
 	}
+}
+
+// New handler function for token verification
+func HandlerVerifyToken(c echo.Context) error {
+	user := c.Get("user").(jwt.MapClaims)
+	uid := user["uid"]
+
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"uid":     uid,
+	})
 }

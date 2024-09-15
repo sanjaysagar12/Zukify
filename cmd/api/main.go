@@ -31,9 +31,9 @@ func main() {
 	// Protected routes
 	r := e.Group("/api")
 	r.Use(handlers.JWTMiddleware)
-	// Add your protected routes here, for example:
-	// r.GET("/user", handlers.GetUserProfile)
-
+	r.GET("/verify", handlers.HandlerVerifyToken)
+	r.POST("/workspace", handlers.HandlerCreateWorkspace) // New route for workspace creation
+	e.POST("/runAT",handlers.HandlePostAT)
 	// Start server
 	e.Logger.Fatal(e.Start(":80"))
 }
