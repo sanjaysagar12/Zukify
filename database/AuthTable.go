@@ -9,25 +9,34 @@ import (
 type User struct {
 	UID      int             `json:"uid"`
 	Username string          `json:"username"`
-	Password string          `json:"password,omitempty"` // Changed to omitempty
+	Password string          `json:"password,omitempty"`
 	Devices  json.RawMessage `json:"devices,omitempty"`
 }
 
-func CreateUser(user *User) error {
+func CreateUser(user *User) (int, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	// Convert devices to JSON string
 	devicesJSON, err := json.Marshal(user.Devices)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	_, err = UserDB.Exec("INSERT INTO auth (username, password, devices) VALUES (?, ?, ?)",
+	result, err := UserDB.Exec("INSERT INTO auth (username, password, devices) VALUES (?, ?, ?)",
 		user.Username, string(hashedPassword), string(devicesJSON))
-	return err
+	if err != nil {
+		return 0, err
+	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+
+	return int(id), nil
 }
 
 func UserExists(username string) (bool, error) {
@@ -38,7 +47,6 @@ func UserExists(username string) (bool, error) {
 	}
 	return exists, nil
 }
-
 
 func GetUserByUsername(username string) (*User, error) {
 	user := &User{}

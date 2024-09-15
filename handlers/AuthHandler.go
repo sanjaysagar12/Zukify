@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt"
@@ -10,7 +11,7 @@ import (
 	"zukify.com/database"
 )
 
-var jwtSecret = []byte("YYtxAglkWDMmMf3BdO9oMSpyGcGCIREj9EAVIYiKQuY=") // Replace with a secure secret key
+var jwtSecret = []byte(os.Getenv("JWT_SECRET"))
 
 func HandlerPostRegister(c echo.Context) error {
 	user := new(database.User)
@@ -32,11 +33,13 @@ func HandlerPostRegister(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusConflict, "User already exists")
 	}
 
-	if err := database.CreateUser(user); err != nil {
+	uid, err := database.CreateUser(user)
+	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to create user")
 	}
 
-	// Remove password from response
+	// Set the UID and remove password from response
+	user.UID = uid
 	user.Password = ""
 
 	return c.JSON(http.StatusCreated, user)
