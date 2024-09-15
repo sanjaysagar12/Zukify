@@ -35,6 +35,10 @@ func main() {
 	r.POST("/workspace", handlers.HandlerCreateWorkspace) // New route for workspace creation
 	r.POST("/workspace/saveat", handlers.HandlerSaveAT)
 	r.POST("/workspace/saveflow", handlers.HandlerSaveFlow)
+	r.GET("/workspace/fetchpathat", handlers.HandlerFetchPathAT)
+	r.GET("/workspace/fetchallat", handlers.HandlerFetchAllAT)
+	r.GET("/workspace/fetchpathflow", handlers.HandlerFetchPathFlow)
+	r.GET("/workspace/fetchallflow", handlers.HandlerFetchAllFlow)
 	e.POST("/runAT",handlers.HandlePostAT)
 	// Start server
 	e.Logger.Fatal(e.Start(":80"))

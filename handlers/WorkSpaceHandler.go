@@ -181,3 +181,145 @@ func HandlerSaveFlow(c echo.Context) error {
 		"message": "Flow data saved successfully",
 	})
 }
+
+func HandlerFetchPathAT(c echo.Context) error {
+	user := c.Get("user").(jwt.MapClaims)
+	uid, ok := user["uid"].(float64)
+	if !ok {
+		log.Printf("Failed to extract UID from token: %v", user)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Invalid token")
+	}
+
+	wid := c.QueryParam("wid")
+	if wid == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "Workspace ID (wid) is required")
+	}
+
+	// Check if user has access to the workspace
+	hasAccess, err := database.UserHasAccessToWorkspace(int(uid), wid)
+	if err != nil {
+		log.Printf("Failed to check workspace access: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to verify workspace access")
+	}
+	if !hasAccess {
+		return echo.NewHTTPError(http.StatusForbidden, "You don't have access to this workspace")
+	}
+
+	// Fetch path AT data
+	pathATData, err := database.FetchPathAT(wid)
+	if err != nil {
+		log.Printf("Failed to fetch path AT data: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch path AT data")
+	}
+
+	return c.JSON(http.StatusOK, pathATData)
+}
+
+func HandlerFetchAllAT(c echo.Context) error {
+	user := c.Get("user").(jwt.MapClaims)
+	uid, ok := user["uid"].(float64)
+	if !ok {
+		log.Printf("Failed to extract UID from token: %v", user)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Invalid token")
+	}
+
+	wid := c.QueryParam("wid")
+	if wid == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "Workspace ID (wid) is required")
+	}
+
+	id := c.QueryParam("id")
+	if id == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "ID is required")
+	}
+
+	// Check if user has access to the workspace
+	hasAccess, err := database.UserHasAccessToWorkspace(int(uid), wid)
+	if err != nil {
+		log.Printf("Failed to check workspace access: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to verify workspace access")
+	}
+	if !hasAccess {
+		return echo.NewHTTPError(http.StatusForbidden, "You don't have access to this workspace")
+	}
+
+	// Fetch all AT data
+	allATData, err := database.FetchAllAT(wid, id)
+	if err != nil {
+		log.Printf("Failed to fetch all AT data: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch all AT data")
+	}
+
+	return c.JSON(http.StatusOK, allATData)
+}
+
+func HandlerFetchPathFlow(c echo.Context) error {
+	user := c.Get("user").(jwt.MapClaims)
+	uid, ok := user["uid"].(float64)
+	if !ok {
+		log.Printf("Failed to extract UID from token: %v", user)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Invalid token")
+	}
+
+	wid := c.QueryParam("wid")
+	if wid == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "Workspace ID (wid) is required")
+	}
+
+	// Check if user has access to the workspace
+	hasAccess, err := database.UserHasAccessToWorkspace(int(uid), wid)
+	if err != nil {
+		log.Printf("Failed to check workspace access: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to verify workspace access")
+	}
+	if !hasAccess {
+		return echo.NewHTTPError(http.StatusForbidden, "You don't have access to this workspace")
+	}
+
+	// Fetch path Flow data
+	pathFlowData, err := database.FetchPathFlow(wid)
+	if err != nil {
+		log.Printf("Failed to fetch path Flow data: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch path Flow data")
+	}
+
+	return c.JSON(http.StatusOK, pathFlowData)
+}
+
+func HandlerFetchAllFlow(c echo.Context) error {
+	user := c.Get("user").(jwt.MapClaims)
+	uid, ok := user["uid"].(float64)
+	if !ok {
+		log.Printf("Failed to extract UID from token: %v", user)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Invalid token")
+	}
+
+	wid := c.QueryParam("wid")
+	if wid == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "Workspace ID (wid) is required")
+	}
+
+	fid := c.QueryParam("fid")
+	if fid == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "Flow ID (fid) is required")
+	}
+
+	// Check if user has access to the workspace
+	hasAccess, err := database.UserHasAccessToWorkspace(int(uid), wid)
+	if err != nil {
+		log.Printf("Failed to check workspace access: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to verify workspace access")
+	}
+	if !hasAccess {
+		return echo.NewHTTPError(http.StatusForbidden, "You don't have access to this workspace")
+	}
+
+	// Fetch all Flow data
+	allFlowData, err := database.FetchAllFlow(wid, fid)
+	if err != nil {
+		log.Printf("Failed to fetch all Flow data: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch all Flow data")
+	}
+
+	return c.JSON(http.StatusOK, allFlowData)
+}
