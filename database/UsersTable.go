@@ -6,6 +6,7 @@ import (
 	"log"
 	"database/sql"
 	"errors"
+	
 )
 
 type WorkspaceInfo struct {
@@ -113,4 +114,24 @@ func WorkspaceExists(uid int, workspaceName string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func GetUserWorkspaces(uid int) ([]WorkspaceInfo, error) {
+	var workspaces sql.NullString
+	err := UserDB.QueryRow("SELECT workspace FROM users WHERE uid = ?", uid).Scan(&workspaces)
+	if err != nil {
+		return nil, err
+	}
+
+	if !workspaces.Valid || workspaces.String == "" {
+		return nil, nil
+	}
+
+	var workspaceList []WorkspaceInfo
+	err = json.Unmarshal([]byte(workspaces.String), &workspaceList)
+	if err != nil {
+		return nil, err
+	}
+
+	return workspaceList, nil
 }

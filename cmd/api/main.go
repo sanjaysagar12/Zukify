@@ -33,6 +33,8 @@ func main() {
 	r.Use(handlers.JWTMiddleware)
 	r.GET("/verify", handlers.HandlerVerifyToken)
 	r.POST("/workspace", handlers.HandlerCreateWorkspace) // New route for workspace creation
+	r.POST("/workspace/saveat", handlers.HandlerSaveAT)
+	r.POST("/workspace/saveflow", handlers.HandlerSaveFlow)
 	e.POST("/runAT",handlers.HandlePostAT)
 	// Start server
 	e.Logger.Fatal(e.Start(":80"))
