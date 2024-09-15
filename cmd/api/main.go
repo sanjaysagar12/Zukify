@@ -24,9 +24,15 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 
-	// Routes
-	e.POST("/register", handlers.Register)
-	e.POST("/login", handlers.Login)
+	// Public routes
+	e.POST("/register", handlers.HandlerPostRegister)
+	e.POST("/login", handlers.HandlerPostLogin)
+
+	// Protected routes
+	r := e.Group("/api")
+	r.Use(handlers.JWTMiddleware)
+	// Add your protected routes here, for example:
+	// r.GET("/user", handlers.GetUserProfile)
 
 	// Start server
 	e.Logger.Fatal(e.Start(":80"))

@@ -30,6 +30,16 @@ func CreateUser(user *User) error {
 	return err
 }
 
+func UserExists(username string) (bool, error) {
+	var exists bool
+	err := UserDB.QueryRow("SELECT EXISTS(SELECT 1 FROM auth WHERE username = ?)", username).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
+
 func GetUserByUsername(username string) (*User, error) {
 	user := &User{}
 	var devices sql.NullString
