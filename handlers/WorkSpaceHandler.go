@@ -323,3 +323,33 @@ func HandlerFetchAllFlow(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, allFlowData)
 }
+
+func HandlerGetWorkspaces(c echo.Context) error {
+	user := c.Get("user").(jwt.MapClaims)
+	uid, ok := user["uid"].(float64)
+	if !ok {
+		log.Printf("Failed to extract UID from token: %v", user)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Invalid token")
+	}
+
+	workspaces, err := database.GetUserWorkspaces(int(uid))
+	if err != nil {
+		log.Printf("Failed to get user workspaces: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to retrieve workspaces")
+	}
+
+	type WorkspaceResponse struct {
+		WID  string `json:"wid"`
+		Name string `json:"name"`
+	}
+
+	var response []WorkspaceResponse
+	for _, ws := range workspaces {
+		response = append(response, WorkspaceResponse{
+			WID:  ws.WID,
+			Name: ws.Name,
+		})
+	}
+
+	return c.JSON(http.StatusOK, response)
+}

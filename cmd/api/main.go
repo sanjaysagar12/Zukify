@@ -33,6 +33,7 @@ func main() {
 	r.Use(handlers.JWTMiddleware)
 	r.GET("/verify", handlers.HandlerVerifyToken)
 	r.POST("/workspace", handlers.HandlerCreateWorkspace) // New route for workspace creation
+	r.GET("/getworkspace", handlers.HandlerGetWorkspaces) 
 	r.POST("/workspace/saveat", handlers.HandlerSaveAT)
 	r.POST("/workspace/saveflow", handlers.HandlerSaveFlow)
 	r.GET("/workspace/fetchpathat", handlers.HandlerFetchPathAT)
