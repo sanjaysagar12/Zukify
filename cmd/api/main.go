@@ -39,6 +39,7 @@ func main() {
 	r.GET("/workspace/fetchallat", handlers.HandlerFetchAllAT)
 	r.GET("/workspace/fetchpathflow", handlers.HandlerFetchPathFlow)
 	r.GET("/workspace/fetchallflow", handlers.HandlerFetchAllFlow)
+	r.POST("/collaborator", handlers.HandlerAddCollaborator) 
 	e.POST("/runAT",handlers.HandlePostAT)
 	// Start server
 	e.Logger.Fatal(e.Start(":80"))

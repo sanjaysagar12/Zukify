@@ -2,11 +2,10 @@ package database
 
 import (
 	"encoding/json"
-	// "fmt"
 	"log"
 	"database/sql"
 	"errors"
-	
+	"fmt"
 )
 
 type WorkspaceInfo struct {
@@ -135,3 +134,52 @@ func GetUserWorkspaces(uid int) ([]WorkspaceInfo, error) {
 
 	return workspaceList, nil
 }
+
+func AddWorkspaceToCollaborator(collabUID int, workspace WorkspaceInfo) error {
+	var workspaces sql.NullString
+	err := UserDB.QueryRow("SELECT workspace FROM users WHERE uid = ?", collabUID).Scan(&workspaces)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			// Create new user entry if it doesn't exist
+			return createNewUserWithWorkspace(collabUID, workspace.WID, workspace.Name)
+		}
+		return err
+	}
+
+	var workspaceList []WorkspaceInfo
+	if workspaces.Valid && workspaces.String != "" {
+		err = json.Unmarshal([]byte(workspaces.String), &workspaceList)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Add new workspace
+	workspaceList = append(workspaceList, workspace)
+
+	// Marshal updated workspace list
+	updatedWorkspaces, err := json.Marshal(workspaceList)
+	if err != nil {
+		return err
+	}
+
+	// Update users table
+	_, err = UserDB.Exec("UPDATE users SET workspace = ? WHERE uid = ?", string(updatedWorkspaces), collabUID)
+	return err
+}
+
+func GetWorkspaceInfo(uid int, wid string) (WorkspaceInfo, error) {
+	workspaces, err := GetUserWorkspaces(uid)
+	if err != nil {
+		return WorkspaceInfo{}, err
+	}
+
+	for _, ws := range workspaces {
+		if ws.WID == wid {
+			return ws, nil
+		}
+	}
+
+	return WorkspaceInfo{}, fmt.Errorf("workspace not found")
+}
+
