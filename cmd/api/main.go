@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-
+	"net/http"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"zukify.com/database"
@@ -24,6 +24,14 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 
+    // CORS middleware configuration
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"https://zukify.portos.site"},
+		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodHead, http.MethodOptions},
+		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
+		AllowCredentials: true,
+	}))
+
 	// Public routes
 	e.POST("/register", handlers.HandlerPostRegister)
 	e.POST("/login", handlers.HandlerPostLogin)
@@ -31,7 +39,7 @@ func main() {
 	// Protected routes
 	r := e.Group("/api")
 	r.Use(handlers.JWTMiddleware)
-	r.GET("/verify", handlers.HandlerVerifyToken)
+	r.GET("/verify", handlers.JWTMiddleware(handlers.HandlerVerifyToken))
 	r.POST("/workspace", handlers.HandlerCreateWorkspace) // New route for workspace creation
 	r.GET("/getworkspace", handlers.HandlerGetWorkspaces) 
 	r.POST("/workspace/saveat", handlers.HandlerSaveAT)

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"time"
+	"fmt"
 
 	"github.com/golang-jwt/jwt"
 	"github.com/labstack/echo/v4"
@@ -118,10 +119,35 @@ func JWTMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 
 // New handler function for token verification
 func HandlerVerifyToken(c echo.Context) error {
-	user := c.Get("user").(jwt.MapClaims)
-	uid := user["uid"]
+	fmt.Println("HandlerVerifyToken called")
+	
+	user := c.Get("user")
+	if user == nil {
+		fmt.Println("No user found in context")
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "No user found in context"})
+	}
+
+	token, ok := user.(*jwt.Token)
+	if !ok {
+		fmt.Println("User is not a *jwt.Token")
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "User is not a *jwt.Token"})
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		fmt.Println("Token claims are not jwt.MapClaims")
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Token claims are not jwt.MapClaims"})
+	}
+
+	uid, ok := claims["uid"]
+	if !ok {
+		fmt.Println("UID not found in claims")
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "UID not found in claims"})
+	}
+
+	fmt.Printf("UID found: %v\n", uid)
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"uid":     uid,
+		"uid": uid,
 	})
 }
