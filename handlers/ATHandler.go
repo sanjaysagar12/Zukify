@@ -1,7 +1,6 @@
 package handlers
 import (
 	"net/http"
-
 	"github.com/labstack/echo/v4"
 	"zukify.com/services"
 	"zukify.com/types"
@@ -12,6 +11,6 @@ func HandlePostAT(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request"})
 	}
 
-	results := service.TestEndpoint(req)
+	results := services.TestEndpoint(req)
 	return c.JSON(http.StatusOK, results)
 }

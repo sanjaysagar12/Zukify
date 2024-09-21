@@ -87,39 +87,34 @@ func HandlerSaveAT(c echo.Context) error {
 	}
 
 	var req struct {
-		WorkspaceName string         `json:"workspace_name"`
+		WID 			string         `json:"wid"`
 		ATData        database.ATData `json:"at_data"`
 	}
 	if err := c.Bind(&req); err != nil {
 		log.Printf("Failed to bind request: %v", err)
 		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
 	}
-
-	if req.WorkspaceName == "" {
+	fmt.Println(req)
+	if req.WID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "Workspace name is required")
 	}
 
 	// Check if user has access to the workspace
-	workspaces, err := database.GetUserWorkspaces(int(uid))
+	_, err := database.GetUserWorkspaces(int(uid))
 	if err != nil {
 		log.Printf("Failed to get user workspaces: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to verify workspace access")
 	}
 
-	var tablePrefix string
-	for _, ws := range workspaces {
-		if ws.Name == req.WorkspaceName {
-			tablePrefix = ws.WID
-			break
-		}
-	}
+	// var tablePrefix string
 
-	if tablePrefix == "" {
-		return echo.NewHTTPError(http.StatusForbidden, "You don't have access to this workspace")
-	}
+
+	// if tablePrefix == "" {
+	// 	return echo.NewHTTPError(http.StatusForbidden, "You don't have access to this workspace")
+	// }
 
 	// Save AT data
-	err = database.SaveATData(tablePrefix, &req.ATData, int(uid))
+	err = database.SaveATData(req.WID, &req.ATData, int(uid))
 	if err != nil {
 		log.Printf("Failed to save AT data: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to save AT data")
