@@ -22,6 +22,7 @@ type PathATData struct {
 	ID     int    `json:"id"`
 	Path   string `json:"path"`
 	Method string `json:"method"`
+	Tag    string `json:"tag"` // Added tag field
 }
 
 type AllATData struct {
@@ -70,7 +71,7 @@ func SaveATData(tablePrefix string, data *ATData, uid int) error {
 }
 
 func FetchPathAT(wid string) ([]PathATData, error) {
-	query := fmt.Sprintf("SELECT id, path, Method FROM %s_at", wid)
+	query := fmt.Sprintf("SELECT id, path, Method, tag FROM %s_at", wid)
 	rows, err := WorkspaceDB.Query(query)
 	if err != nil {
 		return nil, err
@@ -80,7 +81,7 @@ func FetchPathAT(wid string) ([]PathATData, error) {
 	var result []PathATData
 	for rows.Next() {
 		var data PathATData
-		if err := rows.Scan(&data.ID, &data.Path, &data.Method); err != nil {
+		if err := rows.Scan(&data.ID, &data.Path, &data.Method, &data.Tag); err != nil {
 			return nil, err
 		}
 		result = append(result, data)
