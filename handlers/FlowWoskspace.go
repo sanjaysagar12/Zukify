@@ -3,73 +3,68 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
-	"net/http"
 	"fmt"
+	"github.com/golang-jwt/jwt"
 	"github.com/labstack/echo/v4"
+	"log"
+	"net/http"
 	"zukify.com/database"
 )
 
 type FlowData struct {
-	Nodes []interface{} `json:"nodes"`
-	Edges []interface{} `json:"edges"`
+	Name  string          `json:"name"`
+	WID   string          `json:"wid"`
+	Nodes json.RawMessage `json:"nodes"`
+	Edges json.RawMessage `json:"edges"`
 }
 
 func SaveFlow(c echo.Context) error {
+	user := c.Get("user").(jwt.MapClaims)
+	uid, ok := user["uid"].(float64)
+	if !ok {
+		log.Printf("Failed to extract UID from token: %v", user)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Invalid token")
+	}
+
 	var flowData FlowData
 
 	if err := c.Bind(&flowData); err != nil {
+		fmt.Println("Error", err)
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
-	// Get user ID and workspace ID from the token
-	// This is a placeholder - implement your own logic to get these IDs
-	userID := 1
-	workspaceID := 1
-
 	// Convert flow data to JSON
-	flowJSON, err := json.Marshal(flowData)
+	flowJSON, err := json.Marshal(map[string]json.RawMessage{
+		"nodes": flowData.Nodes,
+		"edges": flowData.Edges,
+	})
+
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to marshal flow data"})
 	}
 
-	// Save flow data to the database
-	query := `INSERT INTO flow_data (user_id, workspace_id, flow_json) VALUES (?, ?, ?)
-              ON DUPLICATE KEY UPDATE flow_json = VALUES(flow_json)`
-	
-	_, err = database.WorkspaceDB.Exec(query, userID, workspaceID, flowJSON)
+	// Construct the table name
+	tableName := fmt.Sprintf("%s_flow", flowData.WID)
+	fmt.Println("Table Name: ", tableName)
+	query := fmt.Sprintf(`
+		INSERT INTO %s (name, flow_data, modified_by)
+		VALUES (?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+		name = VALUES(name),
+		flow_data = VALUES(flow_data),
+		modified_by = VALUES(modified_by)
+	`, tableName)
+	_, err = database.WorkspaceDB.Exec(query, flowData.Name, flowJSON, uid)
+
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to save flow data"})
+		fmt.Println("Error", err)
+
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to save flow data: " + err.Error()})
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"message": "Flow data saved successfully"})
 }
 
-func LoadFlow(c echo.Context) error {
-	// Get user ID and workspace ID from the token
-	// This is a placeholder - implement your own logic to get these IDs
-	userID := 1
-	workspaceID := 1
-
-	// Retrieve flow data from the database
-	query := `SELECT flow_json FROM flow_data WHERE user_id = ? AND workspace_id = ?`
-	var flowJSON []byte
-	err := database.WorkspaceDB.QueryRow(query, userID, workspaceID).Scan(&flowJSON)
-
-	if err != nil {
-		if err == sql.ErrNoRows {
-			// If no data is found, return an empty flow
-			return c.JSON(http.StatusOK, FlowData{Nodes: []interface{}{}, Edges: []interface{}{}})
-		}
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to load flow data"})
-	}
-
-	var flowData FlowData
-	if err := json.Unmarshal(flowJSON, &flowData); err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to unmarshal flow data"})
-	}
-
-	return c.JSON(http.StatusOK, flowData)
-}
 func LoadSpecificFlow(c echo.Context) error {
 	// Get workspace ID and flow ID from the request
 	// This assumes you're passing these as query parameters or path parameters
@@ -78,7 +73,7 @@ func LoadSpecificFlow(c echo.Context) error {
 
 	// Construct the table name using the workspace ID
 	tableName := fmt.Sprintf("%s_flow", workspaceID)
-	fmt.Println("Table Name:",tableName)
+	fmt.Println("Table Name:", tableName)
 	// Retrieve flow data from the database
 	query := fmt.Sprintf("SELECT flow_data, fid FROM %s WHERE fid = ?", tableName)
 	var flowJSON []byte
@@ -87,20 +82,19 @@ func LoadSpecificFlow(c echo.Context) error {
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			fmt.Println("Error",err)
+			fmt.Println("Error", err)
 			// If no data is found, return an appropriate error message
 			return c.JSON(http.StatusNotFound, map[string]string{"error": "Flow not found"})
 		}
-		fmt.Println("Error",err)
+		fmt.Println("Error", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to load flow data"})
 	}
 
 	var flowData FlowData
 	if err := json.Unmarshal(flowJSON, &flowData); err != nil {
-		fmt.Println("Error",err)
+		fmt.Println("Error", err)
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to unmarshal flow data"})
 	}
-	
 
 	return c.JSON(http.StatusOK, flowData)
 }

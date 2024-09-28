@@ -58,7 +58,7 @@ func main() {
 	e.POST("/runAT", handlers.HandlePostAT)
 	e.POST("/runATFromSaved",handlers.HandlePostATFromSaved)
 	
-	r.GET("/load-flow", handlers.LoadFlow)
+	r.GET("/load-flow", handlers.LoadSpecificFlow)
 	r.POST("/save-flow", handlers.SaveFlow)
 
 
