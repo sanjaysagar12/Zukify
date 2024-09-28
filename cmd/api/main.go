@@ -57,7 +57,12 @@ func main() {
 	r.POST("/collaborator", handlers.HandlerAddCollaborator)
 	e.POST("/runAT", handlers.HandlePostAT)
 	e.POST("/runATFromSaved",handlers.HandlePostATFromSaved)
+	
+	r.GET("/load-flow", handlers.LoadFlow)
+	r.POST("/save-flow", handlers.SaveFlow)
+
 
 	// Start server
 	e.Logger.Fatal(e.Start(":80"))
 }
+
