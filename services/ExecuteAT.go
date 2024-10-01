@@ -1,41 +1,42 @@
 package services
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
-
+	"fmt"
 	"zukify.com/types"
 )
 
 func TestEndpoint(req types.ComplexATRequest) (types.TestResponse, map[string]string, types.EndpointResponse) {
-	client := &http.Client{
-		Timeout: time.Second * 10,
-	}
-	fmt.Println("Request Data:", req.EndpointData, req.Env)
-	
+	client := &http.Client{}
+	fmt.Println("Request Data:",req.EndpointData, req.Env)
 	httpReq, err := prepareRequest(req.EndpointData, req.Env)
 	if err != nil {
-		fmt.Printf("Error preparing request: %v\n", err)
-		return runAllTestCases(req.EndpointData.TestCases, nil, nil, 0, req.Env, "request_preparation")
+		return types.TestResponse{
+			Results: []types.TestResult{{Case: "request_creation", Passed: false, Imp: true}},
+			AllImpPassed: false,
+		}, req.Env, types.EndpointResponse{}
 	}
 
 	start := time.Now()
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		fmt.Printf("Error executing request: %v\n", err)
-		return runAllTestCases(req.EndpointData.TestCases, nil, nil, 0, req.Env, "request_execution")
+		return types.TestResponse{
+			Results: []types.TestResult{{Case: "request_execution", Passed: false, Imp: true}},
+			AllImpPassed: false,
+		}, req.Env, types.EndpointResponse{}
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Printf("Error reading response body: %v\n", err)
-		return runAllTestCases(req.EndpointData.TestCases, resp, nil, time.Since(start), req.Env, "response_reading")
+		return types.TestResponse{
+			Results: []types.TestResult{{Case: "response_reading", Passed: false, Imp: true}},
+			AllImpPassed: false,
+		}, req.Env, types.EndpointResponse{}
 	}
 
 	duration := time.Since(start)
@@ -55,40 +56,34 @@ func TestEndpoint(req types.ComplexATRequest) (types.TestResponse, map[string]st
 	}, newEnv, endpointResponse
 }
 
+
 func prepareRequest(data types.ATRequest, env map[string]string) (*http.Request, error) {
+	// Replace variables in URL, headers, and body
 	url := replaceVariables(data.URL, data.Variables, env)
-	
-	httpReq, err := http.NewRequest(data.Method, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("error creating request: %v", err)
-	}
-
-	// Set headers
+	headers := make(map[string]string)
 	for k, v := range data.Headers {
-		httpReq.Header.Set(k, replaceVariables(v, data.Variables, env))
+		headers[k] = replaceVariables(fmt.Sprintf("%v", v), data.Variables, env)
+	}
+	body := make(map[string]interface{})
+	for k, v := range data.Body {
+		body[k] = v
 	}
 
-	// For GET requests, we don't need to set the body
-	if data.Method != "GET" && len(data.Body) > 0 {
-		bodyJSON, err := json.Marshal(data.Body)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling body: %v", err)
-		}
-		httpReq.Body = ioutil.NopCloser(bytes.NewBuffer(bodyJSON))
-		httpReq.ContentLength = int64(len(bodyJSON))
+	bodyJSON, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequest(data.Method, url, strings.NewReader(string(bodyJSON)))
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range headers {
+		httpReq.Header.Set(k, v)
 	}
 
 	return httpReq, nil
-}
-
-func replaceVariables(input string, variables map[string]string, env map[string]string) string {
-	for k, v := range variables {
-		input = strings.ReplaceAll(input, "<<"+k+">>", v)
-	}
-	for k, v := range env {
-		input = strings.ReplaceAll(input, "<<"+k+">>", v)
-	}
-	return input
 }
 
 func runTestCases(testCases []types.TestCase, resp *http.Response, body []byte, duration time.Duration, env map[string]string) ([]types.TestResult, map[string]string) {
@@ -103,17 +98,20 @@ func runTestCases(testCases []types.TestCase, resp *http.Response, body []byte, 
 		result.Passed = runTestCase(tc, resp, body, duration)
 
 		if result.Passed && tc.SetEnv != nil {
-			for k, v := range tc.SetEnv {
-				if strings.HasPrefix(v, "(response[") && strings.HasSuffix(v, "])") {
-					field := strings.TrimSuffix(strings.TrimPrefix(v, "(response["), "])")
-					var responseJSON map[string]interface{}
-					if err := json.Unmarshal(body, &responseJSON); err == nil {
-						if value, ok := responseJSON[field]; ok {
-							newEnv[k] = fmt.Sprintf("%v", value)
+			if setEnv, ok := tc.SetEnv.(map[string]interface{}); ok {
+				for k, v := range setEnv {
+					strValue := fmt.Sprintf("%v", v)
+					if strings.HasPrefix(strValue, "(response[") && strings.HasSuffix(strValue, "])") {
+						field := strings.TrimSuffix(strings.TrimPrefix(strValue, "(response["), "])")
+						var responseJSON map[string]interface{}
+						if err := json.Unmarshal(body, &responseJSON); err == nil {
+							if value, ok := responseJSON[field]; ok {
+								newEnv[k] = fmt.Sprintf("%v", value)
+							}
 						}
+					} else {
+						newEnv[k] = strValue
 					}
-				} else {
-					newEnv[k] = v
 				}
 			}
 		}
@@ -123,6 +121,18 @@ func runTestCases(testCases []types.TestCase, resp *http.Response, body []byte, 
 
 	return results, newEnv
 }
+
+func replaceVariables(input string, variables map[string]string, env map[string]string) string {
+	for k, v := range variables {
+		input = strings.ReplaceAll(input, "<<"+k+">>", v)
+	}
+	for k, v := range env {
+		input = strings.ReplaceAll(input, "<<"+k+">>", v)
+	}
+	return input
+}
+
+
 
 func runTestCase(tc types.TestCase, resp *http.Response, body []byte, duration time.Duration) bool {
 	switch tc.Case {
@@ -140,9 +150,8 @@ func runTestCase(tc types.TestCase, resp *http.Response, body []byte, duration t
 	case "check_json_field_value":
 		var jsonResp map[string]interface{}
 		if err := json.Unmarshal(body, &jsonResp); err == nil {
-			data := tc.Data.(map[string]interface{})
-			value, exists := jsonResp[data["field"].(string)]
-			return exists && fmt.Sprintf("%v", value) == fmt.Sprintf("%v", data["value"])
+			value, exists := jsonResp[tc.Data.(map[string]interface{})["field"].(string)]
+			return exists && value == tc.Data.(map[string]interface{})["value"]
 		}
 		return false
 	case "check_response_time":
@@ -150,9 +159,10 @@ func runTestCase(tc types.TestCase, resp *http.Response, body []byte, duration t
 	case "check_header_exists":
 		_, exists := resp.Header[tc.Data.(string)]
 		return exists
-	case "check_header_value":
-		headerData := tc.Data.(map[string]string)
-		return resp.Header.Get(headerData["name"]) == headerData["value"]
+	// case "check_header_value":
+	// 	headerData := tc.Data.(map[string]string)
+	// 	headerValue := resp.Header.Get(headerData["name"])
+	// 	return headerValue == headerData["value"]
 	case "check_response_non_empty":
 		return len(body) > 0
 	case "check_content_type":
@@ -163,42 +173,34 @@ func runTestCase(tc types.TestCase, resp *http.Response, body []byte, duration t
 		var js json.RawMessage
 		return json.Unmarshal(body, &js) == nil
 	case "check_xml_field_value":
-		// This is a simplified check. For proper XML parsing, you'd need to use an XML parsing library.
+		// This is a simplified check. For robust XML parsing, consider using encoding/xml package
+		xmlData := tc.Data.(map[string]string)
+		return strings.Contains(string(body), "<"+xmlData["field"]+">"+xmlData["value"]+"</"+xmlData["field"]+">")
+	case "check_specific_string_in_html":
 		return strings.Contains(string(body), tc.Data.(string))
 	case "check_json_array_contains_value":
 		var jsonResp []interface{}
 		if err := json.Unmarshal(body, &jsonResp); err == nil {
 			for _, item := range jsonResp {
-				if fmt.Sprintf("%v", item) == fmt.Sprintf("%v", tc.Data) {
+				if item == tc.Data {
 					return true
 				}
 			}
 		}
 		return false
-	case "check_specific_cookie":
-		cookieData := tc.Data.(map[string]string)
-		for _, cookie := range resp.Cookies() {
-			if cookie.Name == cookieData["name"] && cookie.Value == cookieData["value"] {
-				return true
-			}
-		}
-		return false
+	case "check_non_empty_response":
+		return len(body) > 0
+	// case "check_specific_cookie":
+	// 	cookieData := tc.Data.(map[string]string)
+	// 	for _, cookie := range resp.Cookies() {
+	// 		if cookie.Name == cookieData["name"] && cookie.Value == cookieData["value"] {
+	// 			return true
+	// 		}
+	// 	}
+	// 	return false
 	default:
 		return false
 	}
-}
-
-func runAllTestCases(testCases []types.TestCase, resp *http.Response, body []byte, duration time.Duration, env map[string]string, failedCase string) (types.TestResponse, map[string]string, types.EndpointResponse) {
-	results := []types.TestResult{{Case: failedCase, Passed: false, Imp: true}}
-	for _, tc := range testCases {
-		if tc.Case != failedCase {
-			results = append(results, types.TestResult{Case: tc.Case, Passed: false, Imp: tc.Imp})
-		}
-	}
-	return types.TestResponse{
-		Results:      results,
-		AllImpPassed: false,
-	}, env, types.EndpointResponse{}
 }
 
 func checkAllImpPassed(results []types.TestResult) bool {

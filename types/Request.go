@@ -2,39 +2,33 @@ package types
 import (
 	"net/http"
 )
-type LoginRequest struct{
-	Username	string `json:"username"`
-	Password	string	`json:"password"`
-}
 
-type EndpointResponse struct {
-	StatusCode int               `json:"status_code"`
-	Headers    http.Header       `json:"headers"`
-	Body       string            `json:"body"`
-}
 
 
 type ComplexATRequest struct {
-	Env          map[string]string `json:"env"`
-	EndpointData ATRequest         `json:"endpoint_data"`
+	EndpointData ATRequest 
+	Env          map[string]string
 }
 
-
 type ATRequest struct {
-	Tag       string            `json:"tag"`
-	Method    string            `json:"method"`
-	URL       string            `json:"url"`
-	Variables map[string]string `json:"variables"`
-	Headers   map[string]string `json:"headers"`
-	Body      map[string]string `json:"body"`
-	TestCases []TestCase        `json:"test_cases"`
+	Method     string
+	URL        string
+	Headers    map[string]string
+	Body       map[string]interface{}
+	Variables  map[string]string
+	TestCases  []TestCase
 }
 
 type TestCase struct {
-	Case   string                 `json:"case"`
-	Data   interface{}            `json:"data"`
-	SetEnv map[string]string      `json:"set_env,omitempty"`
-	Imp    bool                   `json:"imp"`
+	Case   string      `json:"case"`
+	Data   interface{} `json:"data"`
+	Imp    bool        `json:"imp"`
+	SetEnv interface{} `json:"set_env"`
+}
+
+type TestResponse struct {
+	Results      []TestResult `json:"results"`
+	AllImpPassed bool         `json:"allImpPassed"`
 }
 
 type TestResult struct {
@@ -43,10 +37,17 @@ type TestResult struct {
 	Imp    bool   `json:"imp"`
 }
 
-type TestResponse struct {
-	Results      []TestResult `json:"results"`
-	AllImpPassed bool         `json:"all_imp_passed"`
+type EndpointResponse struct {
+	StatusCode int
+	Headers    http.Header
+	Body       string
 }
+
+type LoginRequest struct{
+	Username	string `json:"username"`
+	Password	string	`json:"password"`
+}
+
 
 type ATResponse struct {
 	Results          []TestResult     `json:"results"`

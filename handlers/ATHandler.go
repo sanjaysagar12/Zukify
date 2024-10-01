@@ -6,6 +6,7 @@ import (
 	"zukify.com/services"
 	"zukify.com/types"
 	"fmt"
+	"encoding/json"
 )
 
 func HandlePostAT(c echo.Context) error {
@@ -22,6 +23,11 @@ func HandlePostAT(c echo.Context) error {
 		NewEnv:           newEnv,
 		EndpointResponse: endpointResponse,
 	}
+	b, err := json.MarshalIndent(response, "", "  ")
+    if err != nil {
+        fmt.Println(err)
+    }
+    fmt.Print(string(b))
 	return c.JSON(http.StatusOK, response)
 }
 
