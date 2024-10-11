@@ -6,6 +6,11 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"io"
+	"bytes"
+	"mime/multipart"
+	"encoding/xml"
+	"net/url"
 	"fmt"
 	"zukify.com/types"
 )
@@ -58,33 +63,99 @@ func TestEndpoint(req types.ComplexATRequest) (types.TestResponse, map[string]st
 
 
 func prepareRequest(data types.ATRequest, env map[string]string) (*http.Request, error) {
-	// Replace variables in URL, headers, and body
-	url := replaceVariables(data.URL, data.Variables, env)
+	endpoint_url := replaceVariables(data.URL, data.Variables, env)
 	headers := make(map[string]string)
 	for k, v := range data.Headers {
 		headers[k] = replaceVariables(fmt.Sprintf("%v", v), data.Variables, env)
 	}
-	body := make(map[string]interface{})
-	for k, v := range data.Body {
-		body[k] = v
+
+	var bodyReader io.Reader
+	contentType := headers["Content-Type"]
+
+	// Process based on Content-Type header
+	switch {
+	case strings.Contains(contentType, "multipart/form-data"):
+		// Handle multipart/form-data (used for file uploads)
+		var b bytes.Buffer
+		writer := multipart.NewWriter(&b)
+
+		for k, v := range data.Body {
+			switch v := v.(type) {
+			case string:
+				// Handle text fields
+				_ = writer.WriteField(k, v)
+			case []byte:
+				// Handle binary files
+				part, err := writer.CreateFormFile(k, "filename")
+				if err != nil {
+					return nil, err
+				}
+				_, err = part.Write(v)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
+
+		writer.Close()
+		bodyReader = &b
+		headers["Content-Type"] = writer.FormDataContentType()
+
+	case strings.Contains(contentType, "application/x-www-form-urlencoded"):
+		// Handle application/x-www-form-urlencoded
+		formData := url.Values{}
+		for k, v := range data.Body {
+			formData.Set(k, fmt.Sprintf("%v", v))
+		}
+		bodyReader = strings.NewReader(formData.Encode())
+
+	case strings.Contains(contentType, "application/json"):
+		// Handle application/json
+		bodyJSON, err := json.Marshal(data.Body)
+		if err != nil {
+			return nil, err
+		}
+		bodyReader = strings.NewReader(string(bodyJSON))
+
+	case strings.Contains(contentType, "text/plain"):
+		// Handle text/plain
+		bodyString := fmt.Sprintf("%v", data.Body["text_field"])
+		bodyReader = strings.NewReader(bodyString)
+
+	case strings.Contains(contentType, "application/xml"):
+		// Handle application/xml
+		bodyXML, err := xml.Marshal(data.Body)
+		if err != nil {
+			return nil, err
+		}
+		bodyReader = strings.NewReader(string(bodyXML))
+
+	case strings.Contains(contentType, "application/octet-stream"):
+		// Handle application/octet-stream (binary data)
+		bodyReader = bytes.NewReader(data.Body["file"].([]byte))
+
+	default:
+		return nil, fmt.Errorf("unsupported content type: %s", contentType)
 	}
 
-	bodyJSON, err := json.Marshal(body)
+	// Create the request with the body
+	httpReq, err := http.NewRequest(data.Method, endpoint_url, bodyReader)
 	if err != nil {
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequest(data.Method, url, strings.NewReader(string(bodyJSON)))
-	if err != nil {
-		return nil, err
-	}
-
+	// Set the headers
+	fmt.Println("Setting headers:")
 	for k, v := range headers {
+		fmt.Println(k, ":", v)
 		httpReq.Header.Set(k, v)
 	}
+	fmt.Println("--------------")
 
 	return httpReq, nil
 }
+
+
 
 func runTestCases(testCases []types.TestCase, resp *http.Response, body []byte, duration time.Duration, env map[string]string) ([]types.TestResult, map[string]string) {
 	var results []types.TestResult
