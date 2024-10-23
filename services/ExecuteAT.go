@@ -13,11 +13,14 @@ import (
 	"net/url"
 	"fmt"
 	"zukify.com/types"
+	"regexp"
+	"strconv"
+	
 )
 
 func TestEndpoint(req types.ComplexATRequest) (types.TestResponse, map[string]string, types.EndpointResponse) {
 	client := &http.Client{}
-	fmt.Println("Request Data:",req.EndpointData, req.Env)
+	fmt.Println("Request Data:", req.EndpointData, req.Env)
 	httpReq, err := prepareRequest(req.EndpointData, req.Env)
 	if err != nil {
 		return types.TestResponse{
@@ -52,14 +55,32 @@ func TestEndpoint(req types.ComplexATRequest) (types.TestResponse, map[string]st
 		Body:       string(body),
 	}
 
-	results, newEnv := runTestCases(req.EndpointData.TestCases, resp, body, duration, req.Env)
+	// Convert req.Env to map[string]interface{}
+	envInterface := make(map[string]interface{})
+	for k, v := range req.Env {
+		envInterface[k] = v
+	}
+
+	results, newEnv := runTestCases(req.EndpointData.TestCases, resp, body, duration, envInterface)
+
+	// Convert newEnv back to map[string]string
+	newEnvString := make(map[string]string)
+	for k, v := range newEnv {
+		if strVal, ok := v.(string); ok {
+			newEnvString[k] = strVal
+		} else {
+			// Handle other types if necessary, or skip
+		}
+	}
+
 	allImpPassed := checkAllImpPassed(results)
 
 	return types.TestResponse{
 		Results:      results,
 		AllImpPassed: allImpPassed,
-	}, newEnv, endpointResponse
+	}, newEnvString, endpointResponse
 }
+
 
 
 func prepareRequest(data types.ATRequest, env map[string]string) (*http.Request, error) {
@@ -156,42 +177,103 @@ func prepareRequest(data types.ATRequest, env map[string]string) (*http.Request,
 }
 
 
+func extractData(data interface{}, slicePattern string) (interface{}, error) {
+    // Remove the "response" part and clean the pattern
+    slicePattern = strings.TrimPrefix(slicePattern, "response")
+    
+    // Use regular expressions to parse the slice pattern (keys and indices)
+    re := regexp.MustCompile(`\[(\w+|\d+|\:\d*)\]`)
+    matches := re.FindAllStringSubmatch(slicePattern, -1)
 
-func runTestCases(testCases []types.TestCase, resp *http.Response, body []byte, duration time.Duration, env map[string]string) ([]types.TestResult, map[string]string) {
-	var results []types.TestResult
-	newEnv := make(map[string]string)
-	for k, v := range env {
-		newEnv[k] = v
-	}
+    current := data
 
-	for _, tc := range testCases {
-		result := types.TestResult{Case: tc.Case, Imp: tc.Imp}
-		result.Passed = runTestCase(tc, resp, body, duration)
+    for _, match := range matches {
+        key := match[1]
 
-		if result.Passed && tc.SetEnv != nil {
-			if setEnv, ok := tc.SetEnv.(map[string]interface{}); ok {
-				for k, v := range setEnv {
-					strValue := fmt.Sprintf("%v", v)
-					if strings.HasPrefix(strValue, "(response[") && strings.HasSuffix(strValue, "])") {
-						field := strings.TrimSuffix(strings.TrimPrefix(strValue, "(response["), "])")
-						var responseJSON map[string]interface{}
-						if err := json.Unmarshal(body, &responseJSON); err == nil {
-							if value, ok := responseJSON[field]; ok {
-								newEnv[k] = fmt.Sprintf("%v", value)
-							}
-						}
-					} else {
-						newEnv[k] = strValue
-					}
-				}
-			}
-		}
+        switch v := current.(type) {
+        case map[string]interface{}:
+            // If it's a map, look for the key
+            current = v[key]
+        case []interface{}:
+            // If it's a slice, handle indexing and slicing
+            if idx, err := strconv.Atoi(key); err == nil {
+                current = v[idx]
+            } else if strings.Contains(key, ":") {
+                // Handle slicing like [1:5]
+                parts := strings.Split(key, ":")
+                start, _ := strconv.Atoi(parts[0])
+                var end int
+                if len(parts) > 1 && parts[1] != "" {
+                    end, _ = strconv.Atoi(parts[1])
+                } else {
+                    end = len(v) // if no end is provided, take till the end
+                }
 
-		results = append(results, result)
-	}
+                if start < 0 || end > len(v) {
+                    return nil, fmt.Errorf("slice out of range")
+                }
+                current = v[start:end]
+            }
+        default:
+            return nil, fmt.Errorf("invalid type: %v", v)
+        }
+    }
 
-	return results, newEnv
+    return current, nil
 }
+
+func runTestCases(testCases []types.TestCase, resp *http.Response, body []byte, duration time.Duration, env map[string]interface{}) ([]types.TestResult, map[string]interface{}) {
+    var results []types.TestResult
+    newEnv := make(map[string]interface{}) // Now, values in newEnv can be of any type
+
+    // Copy the existing env to newEnv
+    for k, v := range env {
+        newEnv[k] = v
+    }
+
+    for _, tc := range testCases {
+        result := types.TestResult{Case: tc.Case, Imp: tc.Imp}
+        result.Passed = runTestCase(tc, resp, body, duration)
+
+        if result.Passed && tc.SetEnv != nil {
+            // First, type assert tc.SetEnv to map[string]interface{}
+            setEnvMap, ok := tc.SetEnv.(map[string]interface{})
+            if !ok {
+                fmt.Println("SetEnv is not a map, skipping...")
+                continue
+            }
+
+            for key, value := range setEnvMap {
+                strVal, ok := value.(string)
+                if ok && strings.HasPrefix(strVal, "(response[") {
+                    // This means the value contains an expression to extract data
+                    var data map[string]interface{}
+                    if err := json.Unmarshal(body, &data); err != nil {
+                        panic(err)
+                    }
+
+                    extractedValue, err := extractData(data, strVal)
+                    fmt.Println("body:", data, "\nextractedValue ", extractedValue, "\nstrVal:", strVal)
+                    if err != nil {
+                        fmt.Printf("Error extracting data for key %s: %v\n", key, err)
+                        continue
+                    }
+
+                    // Store extractedValue directly into newEnv
+                    newEnv[key] = extractedValue
+                } else {
+                    // If it's a simple key-value pair, add it directly to newEnv
+                    newEnv[key] = value
+                }
+            }
+        }
+
+        results = append(results, result)
+    }
+
+    return results, newEnv
+}
+
 
 func replaceVariables(input string, variables map[string]string, env map[string]string) string {
 	for k, v := range variables {

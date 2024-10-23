@@ -6,7 +6,7 @@ import (
 	"zukify.com/services"
 	"zukify.com/types"
 	"fmt"
-	"encoding/json"
+	// "encoding/json"
 )
 
 func HandlePostAT(c echo.Context) error {
@@ -15,7 +15,7 @@ func HandlePostAT(c echo.Context) error {
 		fmt.Println("400 Error")
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid request"})
 	}
-	fmt.Println("ComplexATRequest:",req)
+	// fmt.Println("ComplexATRequest:",req)
 	results, newEnv, endpointResponse := services.TestEndpoint(req)
 	response := types.ATResponse{
 		Results:          results.Results,
@@ -23,11 +23,12 @@ func HandlePostAT(c echo.Context) error {
 		NewEnv:           newEnv,
 		EndpointResponse: endpointResponse,
 	}
-	b, err := json.MarshalIndent(response, "", "  ")
-    if err != nil {
-        fmt.Println(err)
-    }
-    fmt.Print(string(b))
+	fmt.Println("New Env: ",newEnv)
+	// b, err := json.MarshalIndent(response, "", "  ")
+    // if err != nil {
+    //     fmt.Println(err)
+    // }
+    // fmt.Print(string(b))
 	return c.JSON(http.StatusOK, response)
 }
 
