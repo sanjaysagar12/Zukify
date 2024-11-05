@@ -48,7 +48,8 @@ func main() {
 	r.GET("/verify", (handlers.HandlerVerifyToken))
 	r.POST("/workspace", handlers.HandlerCreateWorkspace) // New route for workspace creation
 	r.GET("/getworkspace", handlers.HandlerGetWorkspaces)
-	r.POST("/workspace/saveat", handlers.HandlerSaveAT)
+	r.POST("/workspace/saveasat", handlers.HandlerSaveasAT)
+	r.POST("/workspace/saveat", handlers.HandlerSaveAT)  // Using PUT since it's an update operation
 	r.POST("/workspace/saveflow", handlers.HandlerSaveFlow)
 	r.GET("/workspace/fetchpathat", handlers.HandlerFetchPathAT)
 	r.GET("/workspace/fetchallat", handlers.HandlerFetchAllAT)
@@ -56,7 +57,7 @@ func main() {
 	r.GET("/workspace/fetchallflow", handlers.HandlerFetchAllFlow)
 	r.POST("/collaborator", handlers.HandlerAddCollaborator)
 	e.POST("/runAT", handlers.HandlePostAT)
-	e.POST("/runATFromSaved",handlers.HandlePostATFromSaved)
+	e.POST("/runATFromSaved",handlers.HandlerExtractJWT)
 	
 	r.GET("/load-flow", handlers.LoadSpecificFlow)
 	r.POST("/save-flow", handlers.SaveFlow)

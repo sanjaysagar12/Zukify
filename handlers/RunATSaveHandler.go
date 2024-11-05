@@ -1,82 +1,63 @@
 package handlers
 
-// import (
-// 	"net/http"
-// 	// "strconv"
+import (
+    "net/http"
+    "log"
+    "encoding/json"
+    "github.com/labstack/echo/v4"
+    "github.com/golang-jwt/jwt"
+)
 
-// 	"github.com/labstack/echo/v4"
-// 	"github.com/golang-jwt/jwt"
-// 	"zukify.com/database"
-// 	"zukify.com/services"
-// 	"zukify.com/types"
-// )
+func HandlerExtractJWT(c echo.Context) error {
+    // Get user from context with type assertion safety check
+    user := c.Get("user")
+    if user == nil {
+        log.Printf("No JWT token found in context")
+        return echo.NewHTTPError(http.StatusUnauthorized, "Missing authentication token")
+    }
 
-// func HandlerRunATSave(c echo.Context) error {
-// 	// Extract UID from JWT
-// 	user := c.Get("user")
-// 	claims, ok := user.(jwt.MapClaims)
-// 	if !ok {
-// 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid token claims"})
-// 	}
-	
-// 	uidFloat, ok := claims["uid"].(float64)
-// 	if !ok {
-// 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "Invalid UID in token"})
-// 	}
-// 	uid := int(uidFloat)
+    // Type assert with safety check for jwt.MapClaims
+    claims, ok := user.(jwt.MapClaims)
+    if !ok {
+        log.Printf("Failed to convert user to jwt.MapClaims. Type: %T, Value: %v", user, user)
+        return echo.NewHTTPError(http.StatusUnauthorized, "Invalid token format")
+    }
 
-// 	// Get WID from request
-// 	wid := c.QueryParam("wid")
-// 	if wid == "" {
-// 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Missing WID parameter"})
-// 	}
+    // Pretty print the claims (if they exist)
+    prettyJSON, err := json.MarshalIndent(claims, "", "    ")
+    if err != nil {
+        log.Printf("Failed to marshal claims: %v", err)
+        return echo.NewHTTPError(http.StatusInternalServerError, "Failed to process token")
+    }
+    
+    log.Printf("JWT Claims:\n%s", string(prettyJSON))
 
-// 	// Get ID from request
-// 	id := c.QueryParam("id")
-// 	if id == "" {
-// 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Missing ID parameter"})
-// 	}
+    // Extract UID with type safety
+    uidRaw, exists := claims["uid"]
+    if !exists {
+        log.Printf("No UID found in token claims")
+        return echo.NewHTTPError(http.StatusBadRequest, "Token missing required claim: uid")
+    }
 
-// 	// Check if UID has access to WID
-// 	hasAccess, err := database.UserHasAccessToWorkspace(uid, wid)
-// 	if err != nil {
-// 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Database query error"})
-// 	}
-// 	if !hasAccess {
-// 		return c.JSON(http.StatusForbidden, map[string]string{"error": "Unauthorized access to WID"})
-// 	}
+    // Handle different numeric types that might come from JWT
+    var uid float64
+    switch v := uidRaw.(type) {
+    case float64:
+        uid = v
+    case float32:
+        uid = float64(v)
+    case int:
+        uid = float64(v)
+    case int64:
+        uid = float64(v)
+    default:
+        log.Printf("UID is not a number. Type: %T, Value: %v", uidRaw, uidRaw)
+        return echo.NewHTTPError(http.StatusBadRequest, "Invalid UID format in token")
+    }
 
-// 	// Fetch AT data
-// 	atData, err := database.FetchAllAT(wid, id)
-// 	if err != nil {
-// 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to fetch AT data"})
-// 	}
-// 	if atData == nil {
-// 		return c.JSON(http.StatusNotFound, map[string]string{"error": "No AT data found for given ID"})
-// 	}
-
-// 	// Convert database.AllATData to types.ComplexATRequest
-// 	complexATRequest, err := convertToComplexATRequest(atData)
-// 	if err != nil {
-// 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to process AT data"})
-// 	}
-
-// 	// Run the test endpoint
-// 	testResponse, newEnv, endpointResponse := services.TestEndpoint(*complexATRequest)
-
-// 	// Prepare the response
-// 	response := types.ATResponse{
-// 		Results:          testResponse.Results,
-// 		AllImpPassed:     testResponse.AllImpPassed,
-// 		NewEnv:           newEnv,
-// 		EndpointResponse: endpointResponse,
-// 	}
-
-// 	// Save the test results back to the database
-// 	err = database.SaveATResponse(wid, id, response)
-// 	if err != nil {
-// 		c.Logger().Error("Failed to save test results:", err)
-// 	}
-
-// 	return c.JSON(http.StatusOK, response)
-// }
+    return c.JSON(http.StatusOK, map[string]interface{}{
+        "message": "JWT extracted successfully",
+        "claims":  claims,
+        "uid":     uid,
+    })
+}

@@ -1,14 +1,16 @@
 package handlers
 
 import (
-	"net/http"
 	"crypto/sha256"
+	"database/sql"
 	"fmt"
 	"log"
+	"net/http"
+
 	// "encoding/json"
 
-	"github.com/labstack/echo/v4"
 	"github.com/golang-jwt/jwt"
+	"github.com/labstack/echo/v4"
 	"zukify.com/database"
 )
 
@@ -78,7 +80,7 @@ func HandlerCreateWorkspace(c echo.Context) error {
 	})
 }
 
-func HandlerSaveAT(c echo.Context) error {
+func HandlerSaveasAT(c echo.Context) error {
 	user := c.Get("user").(jwt.MapClaims)
 	uid, ok := user["uid"].(float64)
 	if !ok {
@@ -114,7 +116,7 @@ func HandlerSaveAT(c echo.Context) error {
 	// }
 
 	// Save AT data
-	err = database.SaveATData(req.WID, &req.ATData, int(uid))
+	err = database.SaveAsAT(req.WID, &req.ATData, int(uid))
 	if err != nil {
 		log.Printf("Failed to save AT data: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to save AT data")
@@ -124,6 +126,60 @@ func HandlerSaveAT(c echo.Context) error {
 		"message": "AT data saved successfully",
 	})
 }
+
+func HandlerSaveAT(c echo.Context) error {
+	// Get user from token
+	user := c.Get("user").(jwt.MapClaims)
+	uid, ok := user["uid"].(float64)
+	if !ok {
+		log.Printf("Invalid token user: %v", user)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Invalid token")
+	}
+
+	// Bind request
+	var req struct {
+		WID    string         `json:"wid"`
+		ATData database.ATData `json:"at_data"`
+	}
+	
+	if err := c.Bind(&req); err != nil {
+		log.Printf("Bind error: %v", err)
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid request body")
+	}
+
+	// Basic validation
+	if req.WID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "Workspace name is required")
+	}
+
+	if req.ATData.ID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "AT ID is required")
+	}
+
+	// Verify workspace access
+	_, err := database.GetUserWorkspaces(int(uid))
+	if err != nil {
+		log.Printf("Workspace access error: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to verify workspace access")
+	}
+
+	// Try to update the record
+	err = database.SaveAT(req.WID, &req.ATData, int(uid))
+	if err != nil {
+		log.Printf("Save error: %v", err)
+		if err == sql.ErrNoRows {
+			log.Println("Record not found")
+			return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("Record with ID %s not found", req.ATData.ID))
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "Update failed")
+	}
+
+	log.Println("Record updated successfully")
+	return c.JSON(http.StatusOK, map[string]string{
+		"message": "Record updated successfully",
+	})
+}
+
 
 func HandlerSaveFlow(c echo.Context) error {
 	user := c.Get("user").(jwt.MapClaims)
@@ -248,10 +304,6 @@ func HandlerFetchAllAT(c echo.Context) error {
 	return c.JSON(http.StatusOK, allATData)
 }
 
-
-
-
-
 func HandlerGetWorkspaces(c echo.Context) error {
 	user := c.Get("user").(jwt.MapClaims)
 	uid, ok := user["uid"].(float64)
@@ -281,3 +333,4 @@ func HandlerGetWorkspaces(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, response)
 }
+
