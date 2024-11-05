@@ -91,7 +91,7 @@ func SaveAT(tablePrefix string, data *ATData, uid int) error {
 	// Proceed with update if record exists
 	query := fmt.Sprintf(`
 		UPDATE %s_at 
-		SET path = ?,
+		SET
 			tag = ?,
 			Method = ?,
 			url = ?,
@@ -105,7 +105,6 @@ func SaveAT(tablePrefix string, data *ATData, uid int) error {
 	`, tablePrefix)
 
 	result, err := WorkspaceDB.Exec(query,
-		data.Path,
 		data.Tag,
 		data.Method,
 		data.URL,

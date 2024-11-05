@@ -4,9 +4,15 @@ import (
 	"net/http"
 	"github.com/labstack/echo/v4"
 	"zukify.com/services"
+
+	"github.com/golang-jwt/jwt"
+
+	"zukify.com/database"
+	"log"
 	"zukify.com/types"
 	"fmt"
-	// "encoding/json"
+	"encoding/json"
+	"strings"
 )
 
 func HandlePostAT(c echo.Context) error {
@@ -56,4 +62,128 @@ func HandlePostATFromSaved(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, response)
+}
+
+
+func HandlerRunSavedAT(c echo.Context) error {
+    // Get user from context
+    user := c.Get("user").(jwt.MapClaims)
+    uid, ok := user["uid"].(float64)
+    if !ok {
+        log.Printf("Failed to extract UID from token: %v", user)
+        return echo.NewHTTPError(http.StatusInternalServerError, "Invalid token")
+    }
+
+    // Get query parameters
+    wid := c.QueryParam("wid")
+    if wid == "" {
+        return echo.NewHTTPError(http.StatusBadRequest, "Workspace ID (wid) is required")
+    }
+
+    id := c.QueryParam("id")
+    if id == "" {
+        return echo.NewHTTPError(http.StatusBadRequest, "ID is required")
+    }
+
+    // Check workspace access
+    hasAccess, err := database.UserHasAccessToWorkspace(int(uid), wid)
+    if err != nil {
+        log.Printf("Failed to check workspace access: %v", err)
+        return echo.NewHTTPError(http.StatusInternalServerError, "Failed to verify workspace access")
+    }
+    if !hasAccess {
+        return echo.NewHTTPError(http.StatusForbidden, "You don't have access to this workspace")
+    }
+
+    // Fetch AT data
+    atData, err := database.FetchAllAT(wid, id)
+    if err != nil {
+        log.Printf("Failed to fetch AT data: %v", err)
+        return echo.NewHTTPError(http.StatusInternalServerError, "Failed to fetch AT data")
+    }
+
+    if atData == nil {
+        return echo.NewHTTPError(http.StatusNotFound, "AT data not found")
+    }
+
+    // Convert atData to ComplexATRequest
+    req, err := convertATDataToRequest(atData)
+    if err != nil {
+        log.Printf("Failed to convert AT data: %v", err)
+        return echo.NewHTTPError(http.StatusInternalServerError, "Failed to process AT data")
+    }
+
+    // Run the test endpoint
+    results, newEnv, endpointResponse := services.TestEndpoint(req)
+
+    // Prepare response
+    response := types.ATResponse{
+        Results:          results.Results,
+        AllImpPassed:     results.AllImpPassed,
+        NewEnv:           newEnv,
+        EndpointResponse: endpointResponse,
+    }
+
+    return c.JSON(http.StatusOK, response)
+}
+
+// Header structure for JSON parsing
+type HeaderItem struct {
+    IsInUse bool   `json:"is_inuse"`
+    Key     string `json:"key"`
+    Value   string `json:"value"`
+    Desc    string `json:"desc"`
+}
+
+func convertATDataToRequest(atData *database.AllATData) (types.ComplexATRequest, error) {
+    var req types.ComplexATRequest
+
+    // Initialize the required maps
+    req.EndpointData = types.ATRequest{
+        Headers:    make(map[string]string),
+        Body:      make(map[string]interface{}),
+        Variables: make(map[string]string),
+    }
+    req.Env = make(map[string]string)
+
+    // Set Method and URL
+    req.EndpointData.Method = atData.Method
+    req.EndpointData.URL = atData.URL
+
+    // Parse Headers
+    var headers []HeaderItem
+    if err := json.Unmarshal([]byte(atData.Header), &headers); err != nil {
+        return req, fmt.Errorf("failed to parse headers: %v", err)
+    }
+
+    // Add headers that are in use
+    for _, header := range headers {
+        if header.IsInUse {
+            req.EndpointData.Headers[header.Key] = header.Value
+        }
+    }
+
+    // Parse Body
+    var body map[string]interface{}
+    if err := json.Unmarshal([]byte(atData.Body), &body); err != nil {
+        return req, fmt.Errorf("failed to parse body: %v", err)
+    }
+    req.EndpointData.Body = body
+
+    // Parse TestCases
+    // Remove escaped quotes first if present
+    testcasesStr := strings.ReplaceAll(atData.Testcases, "\\\"", "\"")
+    // Remove surrounding quotes if present
+    testcasesStr = strings.Trim(testcasesStr, "\"")
+    
+    var testCases []types.TestCase
+    if err := json.Unmarshal([]byte(testcasesStr), &testCases); err != nil {
+        return req, fmt.Errorf("failed to parse test cases: %v", err)
+    }
+    req.EndpointData.TestCases = testCases
+
+    // Add any default environment variables if needed
+    req.Env["workspace_id"] = atData.Path // You might want to modify this based on your needs
+
+    return req, nil
 }

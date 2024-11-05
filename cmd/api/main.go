@@ -57,7 +57,7 @@ func main() {
 	r.GET("/workspace/fetchallflow", handlers.HandlerFetchAllFlow)
 	r.POST("/collaborator", handlers.HandlerAddCollaborator)
 	e.POST("/runAT", handlers.HandlePostAT)
-	e.POST("/runATFromSaved",handlers.HandlerExtractJWT)
+	r.POST("/runATFromSaved",handlers.HandlerRunSavedAT)
 	
 	r.GET("/load-flow", handlers.LoadSpecificFlow)
 	r.POST("/save-flow", handlers.SaveFlow)
